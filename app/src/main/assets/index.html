@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Stream Room</title>
 <style>
 :root{--bg:#090c12;--panel:#111622;--card:#182032;--accent:#00b4d8;--text:#f8fafc;--muted:#94a3b8}
@@ -56,7 +56,6 @@ input{width:100%;padding:12px;margin-bottom:10px;background:var(--bg);border:1px
       <button class="nb" onclick="tab('live',this)"><span>📺</span><span class="lbl">Live TV</span></button>
       <button class="nb" onclick="tab('movies',this)"><span>🎬</span><span class="lbl">Movies</span></button>
       <button class="nb" onclick="tab('series',this)"><span>🎞</span><span class="lbl">TV Shows</span></button>
-      <button class="nb" onclick="tab('mylist',this)"><span>★</span><span class="lbl">My List</span></button>
       <button class="nb" onclick="tab('search',this)"><span>⌕</span><span class="lbl">Search</span></button>
       <button class="nb" onclick="tab('settings',this)"><span>⚙</span><span class="lbl">Settings</span></button>
     </div>
@@ -72,12 +71,14 @@ input{width:100%;padding:12px;margin-bottom:10px;background:var(--bg);border:1px
 
 <script>
 var cat = { live: [], movies: [], series: [] };
-var list = [];
 var cur = 'home';
-var sCat = 'All';
 var sCh = null;
 
-document.getElementById('btn-demo').addEventListener('click', function() {
+function cleanText(str) {
+  return String(str || '').replace(/['"\\<>]/g, '');
+}
+
+document.getElementById('btn-demo').onclick = function() {
   var u = 'https://mux.dev';
   cat = {
     live: [
@@ -94,9 +95,9 @@ document.getElementById('btn-demo').addEventListener('click', function() {
     ]
   };
   start();
-});
+};
 
-document.getElementById('btn-conn').addEventListener('click', function() {
+document.getElementById('btn-conn').onclick = function() {
   var b = document.getElementById('u_url').value.trim().replace(/\/$/, '');
   var u = document.getElementById('u_usr').value.trim();
   var p = document.getElementById('u_pwd').value.trim();
@@ -106,36 +107,46 @@ document.getElementById('btn-conn').addEventListener('click', function() {
     return;
   }
   e.textContent = 'Connecting to ' + b + '...';
-  fetch(b + '/player_api.php?username=' + encodeURIComponent(u) + '&password=' + encodeURIComponent(p))
+  var api = b + '/player_api.php?username=' + encodeURIComponent(u) + '&password=' + encodeURIComponent(p);
+  fetch(api)
     .then(function(r) { return r.json(); })
     .then(function(a) {
-      if (!a.user_info || a.user_info.auth !== 1) throw new Error('Invalid login');
+      if (!a || !a.user_info || a.user_info.auth !== 1) throw new Error('Invalid login');
       e.textContent = 'Loading channels...';
-      return fetch(b + '/player_api.php?username=' + encodeURIComponent(u) + '&password=' + encodeURIComponent(p) + '&action=get_live_streams')
+      return fetch(api + '&action=get_live_streams')
         .then(function(r) { return r.json(); })
         .then(function(lv) {
           cat.live = (lv || []).slice(0, 150).map(function(c, i) {
-            return { id: 'l' + c.stream_id, type: 'live', num: c.num || (100 + i), title: c.name, cat: c.category_id || 'Live', url: b + '/live/' + u + '/' + p + '/' + c.stream_id + '.m3u8' };
+            return { id: 'l' + c.stream_id, type: 'live', num: c.num || (100 + i), title: c.name || 'Channel', cat: c.category_id || 'Live', url: b + '/live/' + u + '/' + p + '/' + c.stream_id + '.m3u8' };
           });
-          return fetch(b + '/player_api.php?username=' + encodeURIComponent(u) + '&password=' + encodeURIComponent(p) + '&action=get_vod_streams');
+          e.textContent = 'Loading movies...';
+          return fetch(api + '&action=get_vod_streams');
         })
         .then(function(r) { return r.json(); })
         .then(function(vd) {
           cat.movies = (vd || []).slice(0, 100).map(function(m) {
-            return { id: 'm' + m.stream_id, type: 'movie', title: m.name, desc: 'HD Movie', url: b + '/movie/' + u + '/' + p + '/' + m.stream_id + '.' + (m.container_extension || 'mp4') };
+            return { id: 'm' + m.stream_id, type: 'movie', title: m.name || 'Movie', desc: 'HD Movie', url: b + '/movie/' + u + '/' + p + '/' + m.stream_id + '.' + (m.container_extension || 'mp4') };
+          });
+          e.textContent = 'Loading series...';
+          return fetch(api + '&action=get_series');
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(sr) {
+          cat.series = (sr || []).slice(0, 100).map(function(s) {
+            return { id: 's' + s.series_id, type: 'series', title: s.name || 'Series', desc: s.plot || 'TV Series', url: '' };
           });
           start();
         });
     })
     .catch(function(err) {
-      e.textContent = 'Error: ' + (err.message || 'Connection failed');
+      e.textContent = 'Error: ' + (err && err.message ? err.message : 'Connection failed');
     });
-});
+};
 
 function start() {
   document.getElementById('login').style.display = 'none';
   document.getElementById('shell').style.display = 'flex';
-  sCh = cat.live || null;
+  sCh = cat.live.length > 0 ? cat.live[0] : null;
   draw();
 }
 
@@ -158,25 +169,24 @@ function play(t, u) {
 
 function stop() {
   document.getElementById('player').style.display = 'none';
-  document.getElementById('vid').pause();
+  var v = document.getElementById('vid');
+  v.pause();
+  v.removeAttribute('src');
 }
 
 function row(t, arr) {
-  if (!arr.length) return '';
+  if (!arr || !arr.length) return '';
   return '<div class="row"><h3 style="margin-bottom:8px">' + t + '</h3><div class="track">' +
     arr.map(function(i) {
-      var safeTitle = i.title.replace(/'/g, '');
+      var safeTitle = cleanText(i.title || 'Stream');
       return '<button class="card" onclick="play(\'' + safeTitle + '\',\'' + i.url + '\')">' +
-        '<div style="height:110px;display:flex;align-items:center;justify-content:center;background:#0f172a;font-weight:800;color:#00b4d8;padding:10px;text-align:center">' + i.title + '</div>' +
-        '<div style="padding:8px;font-size:13px;font-weight:600">' + i.title + '</div></button>';
+        '<div style="height:110px;display:flex;align-items:center;justify-content:center;background:#0f172a;font-weight:800;color:#00b4d8;padding:10px;text-align:center">' + safeTitle + '</div>' +
+        '<div style="padding:8px;font-size:13px;font-weight:600">' + safeTitle + '</div></button>';
     }).join('') + '</div></div>';
 }
 
 function draw() {
   var m = document.getElementById('main');
   if (cur === 'home') {
-    var h = cat.movies || cat.live;
-    m.innerHTML = (h ? '<div class="hero"><span style="color:var(--accent);font-weight:800;font-size:12px">FEATURED</span><h1 style="font-size:36px;margin:6px 0">' + h.title + '</h1><p style="color:#cbd5e1;max-width:560px;margin-bottom:14px">' + (h.desc || 'Live Stream') + '</p><button class="btn" style="width:auto;padding:11px 22px" onclick="play(\'' + h.title.replace(/'/g,'') + '\',\'' + h.url + '\')">▶ Play Now</button></div>' : '') +
-      row('Live TV', cat.live) + row('Movies', cat.movies) + row('TV Shows', cat.series);
-  } else if (cur === 'live') {
-    var ls = cat.live;
+    var h = cat.movies.length > 0 ? cat.movies[0] : (cat.live.length > 0 ? cat.live[0] : null);
+    var hTitle = h ? cleanText(h.title || 'Featured') : '';
