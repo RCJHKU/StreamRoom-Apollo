@@ -1,5 +1,6 @@
 package com.streamroom.tv
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.os.Bundle
 import android.view.KeyEvent
 import android.view.View
@@ -8,8 +9,7 @@ import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.appcompat.app.AppCompatActivity
-class MainActivity : AppCompatActivity() {
+class MainActivity : Activity() {
     private lateinit var webView: WebView
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
